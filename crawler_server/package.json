@@ -1,0 +1,28 @@
+{
+  "name": "crawler_server",
+  "version": "1.0.0",
+  "description": "Web crawler server using Express and Puppeteer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "crawler",
+    "puppeteer",
+    "express",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "mysql2": "^3.16.0",
+    "puppeteer": "^21.11.0",
+    "snowflake-id": "^1.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
