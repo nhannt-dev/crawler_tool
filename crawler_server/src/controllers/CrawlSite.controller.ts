@@ -281,4 +281,27 @@ export class CrawlSiteController {
       throw error;
     }
   }
+
+  /**
+   * PATCH /api/crawl/:site_id/:category_id
+   * 
+   * Update category with new selectors
+   */
+  async updateCategory(req: Request, res: Response): Promise<void> {
+    try {
+      // Extract site_id and category_id from URL params
+      const { site_id, category_id } = req.params;
+
+      // Extract data from request body
+      const data: ICreateCategoryDTO = req.body;
+
+      // Call service to update category
+      const response = await this.service.updateCategory(site_id, category_id, data);
+
+      res.status(200).json(response);
+    } catch (error: any) {
+      // Error handling được xử lý bởi error middleware
+      throw error;
+    }
+  }
 }

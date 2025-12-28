@@ -81,6 +81,16 @@ router.post(
 );
 
 /**
+ * PATCH /api/crawl/:site_id/:category_id
+ * Update category with new selectors
+ */
+router.patch(
+  '/crawl/:site_id/:category_id',
+  CrawlSiteValidator.validateUpdateCategory,
+  asyncHandler(controller.updateCategory.bind(controller))
+);
+
+/**
  * PATCH /api/modify-crawl/:site_id
  * Modify an existing crawl task
  */

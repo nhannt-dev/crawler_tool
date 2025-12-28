@@ -629,4 +629,165 @@ export class CrawlSiteService {
       }))
     };
   }
+
+  /**
+   * Update category with new selectors
+   * 
+   * Business flow:
+   * 1. Validate site exists
+   * 2. Validate category exists and belongs to site
+   * 3. Launch Puppeteer and crawl with new selectors
+   * 4. Extract category title
+   * 5. Generate unique slug from title (excluding current category)
+   * 6. Update category in database
+   * 7. Return updated category
+   * 
+   * @param siteId - Site ID
+   * @param categoryId - Category ID to update
+   * @param data - New selectors
+   * @returns {Promise<{ site_id: string; category: ICategoryResponseDTO }>}
+   */
+  async updateCategory(
+    siteId: string,
+    categoryId: string,
+    data: ICreateCategoryDTO
+  ): Promise<{ site_id: string; category: ICategoryResponseDTO }> {
+    // 1. Validate site exists
+    const site = await this.repository.findById(siteId);
+    if (!site) {
+      throw new Error('Site not found');
+    }
+
+    // 2. Validate category exists and belongs to site
+    const category = await this.categoryRepository.findById(categoryId);
+    if (!category) {
+      throw new Error('Category not found');
+    }
+
+    if (category.site_id !== siteId) {
+      throw new Error('Category does not belong to this site');
+    }
+
+    // 3. Validate selectors
+    if (!data.title_selector || data.title_selector.trim().length === 0) {
+      throw new Error('title_selector is required');
+    }
+
+    if (!data.link_selector || data.link_selector.trim().length === 0) {
+      throw new Error('link_selector is required');
+    }
+
+    // 4. Launch Puppeteer and crawl with new selectors
+    let categoryTitle: string;
+    
+    try {
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+
+      const page = await browser.newPage();
+      
+      // Navigate to site URL
+      await page.goto(site.crawl_link, {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+
+      // Extract category title using provided selector
+      const titleElements = await page.$$(data.title_selector);
+      
+      if (titleElements.length === 0) {
+        await browser.close();
+        throw new Error(`No element found for selector: ${data.title_selector}`);
+      }
+
+      // Home page keywords to filter out
+      const homeKeywords = [
+        'home', 'homepage', 'home page',
+        'trang chủ', 'trangchu', 'trang-chu',
+        'index', '🏠', '⌂'
+      ];
+
+      // Find first valid category title (skip home page links)
+      let validCategoryTitle = '';
+
+      for (let i = 0; i < titleElements.length; i++) {
+        const element = titleElements[i];
+        
+        const elementData = await page.evaluate((el) => {
+          const text = el.textContent?.trim() || '';
+          const href = el.getAttribute('href') || '';
+          return { text, href };
+        }, element);
+
+        const textLower = elementData.text.toLowerCase();
+        const href = elementData.href.toLowerCase();
+
+        if (!elementData.text) continue;
+
+        const isHomeKeyword = homeKeywords.some(keyword => 
+          textLower === keyword || textLower.includes(keyword)
+        );
+        
+        const isRootPath = href === '/' || href === '#' || href === '' || 
+                          href.endsWith('/') && href.split('/').filter(Boolean).length === 0;
+
+        if (isHomeKeyword || isRootPath) {
+          console.log(`Skipping home page element: "${elementData.text}"`);
+          continue;
+        }
+
+        validCategoryTitle = elementData.text;
+        break;
+      }
+
+      await browser.close();
+
+      if (!validCategoryTitle) {
+        throw new Error('No valid category found - all elements are home page links or empty');
+      }
+
+      categoryTitle = validCategoryTitle;
+    } catch (error: any) {
+      throw new Error(`Crawl failed: ${error.message}`);
+    }
+
+    // 5. Generate unique slug from crawled title (excluding current category)
+    let slug = generateUniqueSlug(categoryTitle);
+    let slugAttempts = 0;
+    const maxSlugAttempts = 5;
+
+    while (
+      await this.categoryRepository.slugExistsForSiteExcludingId(siteId, slug, categoryId) &&
+      slugAttempts < maxSlugAttempts
+    ) {
+      slug = generateUniqueSlug(categoryTitle);
+      slugAttempts++;
+    }
+
+    if (slugAttempts >= maxSlugAttempts) {
+      throw new Error('Failed to generate unique slug. Please try again.');
+    }
+
+    // 6. Update category in database
+    const updatedCategory = await this.categoryRepository.update(categoryId, {
+      title: categoryTitle,
+      slug: slug,
+      title_selector: data.title_selector.trim(),
+      link_selector: data.link_selector.trim()
+    });
+
+    // 7. Return response
+    return {
+      site_id: siteId,
+      category: {
+        id: updatedCategory.id,
+        title: updatedCategory.title,
+        slug: updatedCategory.slug,
+        title_selector: updatedCategory.title_selector,
+        link_selector: updatedCategory.link_selector
+      }
+    };
+  }
 }

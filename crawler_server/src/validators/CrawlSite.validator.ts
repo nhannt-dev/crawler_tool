@@ -170,4 +170,65 @@ export class CrawlSiteValidator {
     // Validation passed, proceed to controller
     next();
   }
+
+  /**
+   * Validate update category request
+   * 
+   * Required fields:
+   * - title_selector (string, max 500)
+   * - link_selector (string, max 500)
+   * - site_id (from URL params)
+   * - category_id (from URL params)
+   */
+  static validateUpdateCategory(req: Request, res: Response, next: NextFunction): void {
+    const errors: string[] = [];
+    const { title_selector, link_selector } = req.body;
+
+    // Validate title_selector
+    if (!title_selector) {
+      errors.push('title_selector is required');
+    } else if (typeof title_selector !== 'string') {
+      errors.push('title_selector must be a string');
+    } else if (title_selector.trim().length === 0) {
+      errors.push('title_selector cannot be empty');
+    } else if (title_selector.length > 500) {
+      errors.push('title_selector must not exceed 500 characters');
+    }
+
+    // Validate link_selector
+    if (!link_selector) {
+      errors.push('link_selector is required');
+    } else if (typeof link_selector !== 'string') {
+      errors.push('link_selector must be a string');
+    } else if (link_selector.trim().length === 0) {
+      errors.push('link_selector cannot be empty');
+    } else if (link_selector.length > 500) {
+      errors.push('link_selector must not exceed 500 characters');
+    }
+
+    // Validate site_id parameter
+    const { site_id, category_id } = req.params;
+    if (!site_id || typeof site_id !== 'string' || site_id.trim().length === 0) {
+      errors.push('site_id is required in URL path');
+    }
+
+    // Validate category_id parameter
+    if (!category_id || typeof category_id !== 'string' || category_id.trim().length === 0) {
+      errors.push('category_id is required in URL path');
+    }
+
+    // If there are validation errors, return 400
+    if (errors.length > 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        message: errors.join('; '),
+        statusCode: 400
+      });
+      return;
+    }
+
+    // Validation passed, proceed to controller
+    next();
+  }
 }

@@ -15,6 +15,7 @@ Hệ thống API tool crawler được xây dựng với kiến trúc MVVM, sử
   - [4. Get Sites List](#4-get-sites-list)
   - [5. Get Site Detail](#5-get-site-detail)
   - [6. Crawl and Create Category](#6-crawl-and-create-category)
+  - [7. Update Category](#7-update-category)
 - [Testing](#-testing)
 
 ---
@@ -738,6 +739,114 @@ chmod +x test.sh
 
 ---
 
+### 7. Update Category
+
+**Endpoint:** `PATCH /api/crawl/{site_id}/{category_id}`
+
+Update an existing category with new selectors, automatically crawl the new title and regenerate the slug.
+
+**URL Parameters:**
+- `site_id` (string, required): The Snowflake ID of the site
+- `category_id` (string, required): The Snowflake ID of the category to update
+
+**Request Body:**
+```json
+{
+  "title_selector": "div.category-name > a",
+  "link_selector": "a.category-link"
+}
+```
+
+**Business Rules:**
+1. Validates that the site exists
+2. Validates that the category exists
+3. Validates that the category belongs to the specified site
+4. Launches Puppeteer to crawl the site with the new selectors
+5. Extracts the title using `title_selector` (auto-skips home page links)
+6. Generates a unique slug from the crawled title (excludes current category from uniqueness check)
+7. Updates the category with new title, slug, and selectors
+
+**Success Response (200 OK):**
+```json
+{
+  "site_id": "7318887623000637440",
+  "category": {
+    "id": "7318920077853147136",
+    "slug": "dien-thoai-may-tinh-bang",
+    "title": "Điện thoại, máy tính bảng",
+    "title_selector": "div.category-name > a",
+    "link_selector": "a.category-link",
+    "created_at": "2024-01-15T08:30:00.000Z",
+    "updated_at": "2024-01-15T10:45:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+- **404 Not Found** (Site doesn't exist):
+```json
+{
+  "error": "Site not found"
+}
+```
+
+- **404 Not Found** (Category doesn't exist):
+```json
+{
+  "error": "Category not found"
+}
+```
+
+- **403 Forbidden** (Category doesn't belong to site):
+```json
+{
+  "error": "Category does not belong to this site"
+}
+```
+
+- **400 Bad Request** (Validation failed):
+```json
+{
+  "errors": [
+    {
+      "field": "title_selector",
+      "message": "Title selector is required"
+    }
+  ]
+}
+```
+
+- **500 Internal Server Error** (Crawl failed):
+```json
+{
+  "error": "Failed to crawl category"
+}
+```
+
+**Example cURL:**
+```bash
+# Update category with new selectors
+curl -X PATCH http://localhost:3000/api/crawl/7318887623000637440/7318920077853147136 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title_selector": "div.updated-selector > a",
+    "link_selector": "a.new-link-selector"
+  }'
+
+# Verify the update
+curl http://localhost:3000/api/site/tiki
+```
+
+**Notes:**
+- The slug is automatically regenerated from the newly crawled title
+- Slug uniqueness is checked per site (excludes the category being updated)
+- Vietnamese characters in titles are converted to URL-friendly slugs
+- Home page links are automatically filtered out during crawling
+- All fields except `id`, `site_id`, `created_at` are updated
+
+---
+
 ## 📊 API Summary
 
 | Endpoint | Method | Purpose | Key Features |
@@ -747,7 +856,8 @@ chmod +x test.sh
 | `/api/purge-crawl/:id` | DELETE | Xóa task | Cascade delete categories |
 | `/api/sites` | GET | List sites | Filter, pagination |
 | `/api/site/:slug` | GET | Site detail | Include categories |
-| `/api/crawl/:id/category` | POST | Crawl categories | Puppeteer, auto skip home, batch insert |
+| `/api/crawl/:site_id/category` | POST | Crawl categories | Puppeteer, auto skip home, batch insert |
+| `/api/crawl/:site_id/:category_id` | PATCH | Update category | Validation, crawl, slug regeneration |
 
 ---
 

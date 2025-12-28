@@ -144,6 +144,77 @@ export class CategoryRepository {
   }
 
   /**
+   * Check if slug exists for a specific site (excluding a specific category ID)
+   * @param siteId - Site ID
+   * @param slug - Category slug
+   * @param excludeCategoryId - Category ID to exclude from check
+   * @returns {Promise<boolean>}
+   */
+  async slugExistsForSiteExcludingId(siteId: string, slug: string, excludeCategoryId: string): Promise<boolean> {
+    const query = `SELECT COUNT(*) as count FROM ${this.tableName} WHERE site_id = ? AND slug = ? AND id != ?`;
+    
+    const [rows] = await pool.execute<RowDataPacket[]>(query, [siteId, slug, excludeCategoryId]);
+    
+    return (rows[0] as any).count > 0;
+  }
+
+  /**
+   * Update a category
+   * @param id - Category ID
+   * @param data - Updated category data
+   * @returns {Promise<CategoryModel>}
+   */
+  async update(id: string, data: Partial<Omit<ICategoryEntity, 'id' | 'created_at' | 'updated_at'>>): Promise<CategoryModel> {
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (data.title !== undefined) {
+      fields.push('title = ?');
+      params.push(data.title);
+    }
+
+    if (data.slug !== undefined) {
+      fields.push('slug = ?');
+      params.push(data.slug);
+    }
+
+    if (data.title_selector !== undefined) {
+      fields.push('title_selector = ?');
+      params.push(data.title_selector);
+    }
+
+    if (data.link_selector !== undefined) {
+      fields.push('link_selector = ?');
+      params.push(data.link_selector);
+    }
+
+    if (fields.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    params.push(id);
+    const query = `UPDATE ${this.tableName} SET ${fields.join(', ')} WHERE id = ?`;
+
+    try {
+      await pool.execute<ResultSetHeader>(query, params);
+      
+      // Fetch the updated record
+      const updated = await this.findById(id);
+      if (!updated) {
+        throw new Error('Failed to retrieve updated category');
+      }
+      
+      return updated;
+    } catch (error: any) {
+      // Handle duplicate slug error
+      if (error.code === 'ER_DUP_ENTRY') {
+        throw new Error('Category slug already exists for this site. Please try again.');
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Delete all categories for a site
    * @param siteId - Crawl site ID
    */
